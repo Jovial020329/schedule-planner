@@ -61,27 +61,6 @@ SillyTavern 第三方扩展插件，为角色和世界生成多天日程安排�
  - 概述：...
 ```
 
-## 安装
-
-### 方法一：通过链接安装
-1. 打开 SillyTavern，进入 **扩展** > **安装扩展**
-2. 输入本仓库地址：
-   ```
-   https://github.com/你的用户名/schedule-planner
-   ```
-3. 点击安装，重启酒馆
-
-### 方法二：手动安装
-1. 下载本仓库的 ZIP 或克隆：
-   ```bash
-   git clone https://github.com/你的用户名/schedule-planner.git
-   ```
-2. 将 `schedule-planner` 文件夹放入 SillyTavern 的：
-   ```
-   data/default-user/extensions/schedule-planner/
-   ```
-3. 重启酒馆
-
 ## 使用方法
 
 1. 在酒馆侧边栏找到 **📅 日程规划 Schedule Planner** 展开面板
