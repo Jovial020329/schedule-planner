@@ -6,7 +6,8 @@
     "js": "index.js",
     "css": "style.css",
     "author": "User",
-    "version": "1.0.0",
-    "homePage": "",
-    "auto_update": false
+    "version": "1.1.4",
+    "homePage": "https://github.com/Jovial020329/schedule-planner",
+    "updateUrl": "https://raw.githubusercontent.com/Jovial020329/schedule-planner/main/manifest.json",
+    "auto_update": true
 }
