@@ -641,6 +641,13 @@ function removeScheduleItem(idx) {
     if (idx < 0 || idx >= settings.activeSchedules.length) return;
     var name = settings.activeSchedules[idx].name;
     settings.activeSchedules.splice(idx, 1);
+    if (currentPreviewIdx === idx) {
+        currentPreviewIdx = -1;
+        jQuery('#sp_schedule_area').html('');
+    } else if (currentPreviewIdx > idx) {
+        currentPreviewIdx--;
+        renderSchedulePreview(currentPreviewIdx);
+    }
     saveSettings();
     updateInjection();
     renderActiveList();
