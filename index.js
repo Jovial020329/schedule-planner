@@ -44,7 +44,7 @@ const DEFAULT_PERSONAL_USER = `以下是近期剧情记录：
 
 请为【{{targetChar}}】生成未来{{numDays}}天的个人日程安排。严格按纯JSON数组输出。`;
 
-const DEFAULT_WORLD_SYS = `你是一个世界观构建师。请为当前故事世界规划未来{{numDays}}天内将要发生的世界事件。
+const DEFAULT_WORLD_SYS = `你是一个世界观构建师。请为【{{targetChar}}】规划未来{{numDays}}天内将要发生的世界事件。
 
 规划要求：
 - 这些是发生在世界中的公共事件、社会动态、环境变化等，不针对某个特定角色
@@ -76,7 +76,7 @@ JSON格式：
 const DEFAULT_WORLD_USER = `以下是近期剧情记录：
 {{context}}
 
-请为这个世界生成未来{{numDays}}天的世界事件。严格按纯JSON数组输出。`;
+请为【{{targetChar}}】生成未来{{numDays}}天的世界事件。严格按纯JSON数组输出。`;
 
 // ==================== Default Settings ====================
 
@@ -104,6 +104,7 @@ const defaultSettings = {
 
     // 世界事件分支
     world: {
+        targetWorldName: '',
         globalGuide: '',
         numDays: 7,
         numContextMessages: 20,
@@ -166,11 +167,25 @@ function getBranchSettings(branch) {
 function getTargetCharName() {
     var bs = getBranchSettings('personal');
     if (bs.targetCharName && bs.targetCharName.trim()) return bs.targetCharName.trim();
+    return getCurrentCharName();
+}
+
+function getCurrentCharName() {
     var ctx = getContext();
     if (ctx.characters && ctx.characters[ctx.characterId]) {
         return ctx.characters[ctx.characterId].name || '角色';
     }
     return '角色';
+}
+
+function getTargetWorldName() {
+    var bs = getBranchSettings('world');
+    if (bs.targetWorldName && bs.targetWorldName.trim()) return bs.targetWorldName.trim();
+    return getCurrentCharName() + '的世界事件';
+}
+
+function getWorldbookSelectionKey(branch) {
+    return branch === 'personal' ? getTargetCharName() : getTargetWorldName();
 }
 
 function escapeHtml(str) {
@@ -222,8 +237,9 @@ function getOtherSchedulesText(excludeName) {
 
 async function getSelectedWorldbookContent(branch) {
     var bs = getBranchSettings(branch);
-    var key = branch === 'personal' ? getTargetCharName() : '_world_';
+    var key = getWorldbookSelectionKey(branch);
     var selections = bs.worldbookSelections[key];
+    if (!selections && branch === 'world') selections = bs.worldbookSelections._world_;
     if (!selections) return '';
     var parts = [];
     for (var bookName of Object.keys(selections)) {
@@ -399,7 +415,7 @@ function getDefaultUserPrompt(branch) {
 
 async function buildPromptsForBranch(branch) {
     var bs = getBranchSettings(branch);
-    var targetChar = branch === 'personal' ? getTargetCharName() : '世界';
+    var targetChar = branch === 'personal' ? getTargetCharName() : getTargetWorldName();
     var numDays = bs.numDays || 7;
     var contextText = getContextMessages(bs.numContextMessages || 20);
 
@@ -424,7 +440,7 @@ async function buildPromptsForBranch(branch) {
     }
     var otherText = '';
     if (bs.injectOtherSchedules) {
-        var excludeName = branch === 'personal' ? getTargetCharName() : '世界事件';
+        var excludeName = branch === 'personal' ? getTargetCharName() : getTargetWorldName();
         var ot = getOtherSchedulesText(excludeName);
         if (ot) otherText = '\n【其他已有日程参考】\n' + ot;
     }
@@ -455,7 +471,7 @@ async function generateSchedule() {
     var settings = getSettings();
     var branch = currentBranch;
 
-    var scheduleName = branch === 'personal' ? getTargetCharName() : '世界事件';
+    var scheduleName = branch === 'personal' ? getTargetCharName() : getTargetWorldName();
 
     isGenerating = true;
     var btn = jQuery('#sp_generate_btn');
@@ -634,8 +650,9 @@ function removeScheduleItem(idx) {
 
 // ==================== Worldbook UI ====================
 
-async function onLoadWorldbooks() {
-    var container = jQuery('#sp_wb_container');
+async function onLoadWorldbooks(branch) {
+    branch = branch || currentBranch;
+    var container = jQuery('#sp_' + branch + '_wb_container');
     container.html('<span style="font-size:0.8em;">加载中...</span>');
     try {
         var allBooks = await loadAllWorldbookNames();
@@ -652,7 +669,7 @@ async function onLoadWorldbooks() {
             for (var entry of entries) {
                 var uid = String(entry.uid !== undefined ? entry.uid : entry.id);
                 var title = entry.comment || (entry.key ? (Array.isArray(entry.key) ? entry.key.join(', ') : entry.key) : '条目' + uid);
-                var checked = isWbEntrySelected(currentBranch, bookName, uid) ? 'checked' : '';
+                var checked = isWbEntrySelected(branch, bookName, uid) ? 'checked' : '';
                 html += '<div class="sp-wb-entry">'
                     + '<input type="checkbox" ' + checked + ' data-book="' + escapeHtml(bookName) + '" data-uid="' + uid + '" class="sp-wb-entry-cb">'
                     + '<label>' + escapeHtml(String(title)) + '</label>'
@@ -669,17 +686,19 @@ async function onLoadWorldbooks() {
 
 function isWbEntrySelected(branch, bookName, uid) {
     var bs = getBranchSettings(branch);
-    var key = branch === 'personal' ? getTargetCharName() : '_world_';
+    var key = getWorldbookSelectionKey(branch);
     var sel = bs.worldbookSelections[key];
+    if (!sel && branch === 'world') sel = bs.worldbookSelections._world_;
     if (!sel || !sel[bookName]) return false;
     return sel[bookName].includes(String(uid));
 }
 
-function saveWbSelections() {
-    var bs = getBranchSettings(currentBranch);
-    var key = currentBranch === 'personal' ? getTargetCharName() : '_world_';
+function saveWbSelections(branch) {
+    branch = branch || currentBranch;
+    var bs = getBranchSettings(branch);
+    var key = getWorldbookSelectionKey(branch);
     var selections = {};
-    jQuery('.sp-wb-entry-cb').each(function() {
+    jQuery('#sp_' + branch + '_wb_container .sp-wb-entry-cb').each(function() {
         var book = jQuery(this).data('book');
         var uid = String(jQuery(this).data('uid'));
         if (!selections[book]) selections[book] = [];
@@ -837,6 +856,11 @@ function buildBranchHTML(branch) {
             + '<label>🏷 规划目标角色</label>'
             + '<input type="text" id="' + prefix + '_target_char" placeholder="">'
             + '</div>';
+    } else {
+        html += '<div class="sp-field">'
+            + '<label>🏷 世界事件名称</label>'
+            + '<input type="text" id="' + prefix + '_target_world" placeholder="留空则使用当前角色名的世界事件">'
+            + '</div>';
     }
 
     html += '<details><summary>🌍 全局指导</summary>'
@@ -860,12 +884,12 @@ function buildBranchHTML(branch) {
         + '<div class="sp-checkbox"><input type="checkbox" id="' + prefix + '_inject_other"><label>注入其他人物日程表</label></div>'
         + '<div id="' + prefix + '_wb_section" style="display:none;">'
         + '<div class="sp-wb-actions">'
-        + '<button class="sp-wb-load-btn">加载世界书</button>'
-        + '<button class="sp-wb-selectall-btn">全选</button>'
-        + '<button class="sp-wb-deselectall-btn">取消全选</button>'
-        + '<button class="sp-wb-save-btn">保存选择</button>'
+        + '<button class="sp-wb-load-btn" data-branch="' + branch + '">加载世界书</button>'
+        + '<button class="sp-wb-selectall-btn" data-branch="' + branch + '">全选</button>'
+        + '<button class="sp-wb-deselectall-btn" data-branch="' + branch + '">取消全选</button>'
+        + '<button class="sp-wb-save-btn" data-branch="' + branch + '">保存选择</button>'
         + '</div>'
-        + '<div class="sp-wb-selector" id="sp_wb_container"><span style="font-size:0.8em;color:#888;">点击"加载世界书"获取条目</span></div>'
+        + '<div class="sp-wb-selector" id="' + prefix + '_wb_container"><span style="font-size:0.8em;color:#888;">点击"加载世界书"获取条目</span></div>'
         + '</div>'
         + '</details>';
 
@@ -910,6 +934,8 @@ function renderBranchFields(branch) {
 
     if (branch === 'personal') {
         jQuery('#' + prefix + '_target_char').val(bs.targetCharName || '');
+    } else {
+        jQuery('#' + prefix + '_target_world').val(bs.targetWorldName || '');
     }
     jQuery('#' + prefix + '_guide').val(bs.globalGuide || '');
     jQuery('#' + prefix + '_num_days').val(bs.numDays || 7);
@@ -1021,6 +1047,10 @@ function bindEvents() {
     });
 
     // World branch fields
+    jQuery('#sp_world_target_world').on('input', function() {
+        getBranchSettings('world').targetWorldName = jQuery(this).val();
+        saveSettings();
+    });
     jQuery('#sp_world_guide').on('input', function() {
         getBranchSettings('world').globalGuide = jQuery(this).val();
         saveSettings();
@@ -1063,10 +1093,20 @@ function bindEvents() {
     });
 
     // Worldbook buttons
-    jQuery(document).on('click', '.sp-wb-load-btn', function() { onLoadWorldbooks(); });
-    jQuery(document).on('click', '.sp-wb-selectall-btn', function() { jQuery('.sp-wb-entry-cb').prop('checked', true); });
-    jQuery(document).on('click', '.sp-wb-deselectall-btn', function() { jQuery('.sp-wb-entry-cb').prop('checked', false); });
-    jQuery(document).on('click', '.sp-wb-save-btn', function() { saveWbSelections(); });
+    jQuery(document).on('click', '.sp-wb-load-btn', function() {
+        onLoadWorldbooks(jQuery(this).data('branch'));
+    });
+    jQuery(document).on('click', '.sp-wb-selectall-btn', function() {
+        var branch = jQuery(this).data('branch');
+        jQuery('#sp_' + branch + '_wb_container .sp-wb-entry-cb').prop('checked', true);
+    });
+    jQuery(document).on('click', '.sp-wb-deselectall-btn', function() {
+        var branch = jQuery(this).data('branch');
+        jQuery('#sp_' + branch + '_wb_container .sp-wb-entry-cb').prop('checked', false);
+    });
+    jQuery(document).on('click', '.sp-wb-save-btn', function() {
+        saveWbSelections(jQuery(this).data('branch'));
+    });
 
     // Reset prompts
     jQuery(document).on('click', '.sp-reset-prompts-btn', function() {
